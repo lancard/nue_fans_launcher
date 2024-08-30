@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Free Aviation Navigation System</title>
+
+    <link rel="stylesheet" href="bootstrap/bootstrap.min.css">
+
+    <script src="dayjs/dayjs.min.js"></script>
+    <script src="bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="geoid.js"></script>
+    <script src="leaflet/leaflet.js"></script>
+    <script src="leaflet/leaflet.textpath.js"></script>
+    <script src="leaflet/leaflet.rotatedMarker.js"></script>
+    <script src="jquery/jquery-3.6.1.min.js"></script>
+    <script src="metarparser/metarParser.js"></script>
+
+    <link rel="stylesheet" href="leaflet/leaflet.css" />
+    <style>
+        nav {
+            z-index: 2000;
+        }
+
+        #stationQNH {
+            font-size: 10px;
+        }
+
+        .airplane-icon {
+            width: 42px;
+            height: 42px;
+        }
+
+        .airplane-icon-inner {
+            margin-left: -6px;
+            margin-top: -7px;
+            width: 26px;
+            height: 26px;
+        }
+
+        .altitude-panel {
+            position: absolute;
+            width: 150px;
+            padding: 5px;
+            top: 5px;
+            right: 5px;
+            z-index: 1000;
+            color: white;
+            background-color: rgba(50, 50, 50, 0.5);
+            border: solid white;
+            line-height: 16px;
+        }
+
+        .speed-indicator {
+            position: absolute;
+            z-index: 1000;
+            font-size: 7vw;
+            bottom: 15px;
+            left: 10px;
+            color: red;
+            font-weight: bold;
+            text-shadow: 2px 2px 3px pink;
+        }
+
+        .altitude-indicator {
+            position: absolute;
+            z-index: 1000;
+            font-size: 7vw;
+            bottom: 15px;
+            right: 10px;
+            color: red;
+            font-weight: bold;
+            text-shadow: 2px 2px 3px pink;
+        }
+
+        .heading-indicator {
+            position: absolute;
+            z-index: 1000;
+            font-size: 7vw;
+            bottom: 15px;
+            right: 45vw;
+            color: chartreuse;
+            font-weight: bold;
+            text-shadow: 2px 2px 3px green;
+        }
+
+        .record-indicator {
+            position: absolute;
+            z-index: 1000;
+            font-size: 5vw;
+            bottom: 55px;
+            left: 2vw;
+            color: blue;
+            font-weight: bold;
+            text-shadow: 2px 2px 3px cornflowerblue;
+        }
+    </style>
+</head>
+
+<body class="d-flex flex-column min-vh-100">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#" onclick="location.reload();">FANS</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarColor01"
+                aria-controls="navbarColor01" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarColor01">
+                <div class="m-2">
+                    <div class="m-2">
+                        <button type="button" class="btn btn-sm p-1 btn-success" data-bs-toggle="modal"
+                            data-bs-target="#metar">METAR</button>
+                        <button type="button" class="btn btn-sm p-1 btn-warning" data-bs-toggle="modal"
+                            data-bs-target="#option">OPTION</button>
+                        <button type="button" class="btn btn-sm p-1 btn-danger" onclick='$(".record-indicator").toggle();'>REC ●</button>
+                    </div>
+                    <div class="m-2">
+                        <button type="button" class="btn btn-sm p-1 btn-info" data-bs-toggle="modal"
+                            data-bs-target="#radial">RADIAL/DME</button>
+                        <button type="button" class="btn btn-sm p-1 btn-info" data-bs-toggle="modal"
+                            data-bs-target="#sidstar">SID/STAR</button>
+                    </div>
+                    <div class="m-2">
+                        <button type="button" class="btn btn-sm p-1 btn-secondary" data-bs-toggle="modal"
+                            data-bs-target="#privacy">PrivacyPolicy</button>
+                        <button type="button" class="btn btn-sm p-1 btn-secondary" data-bs-toggle="modal"
+                            data-bs-target="#credit">Credits</button>
+                        <button type="button" class="btn btn-sm p-1 btn-secondary" data-bs-toggle="modal"
+                            data-bs-target="#termsOfUse">EULA</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div id="map" class="flex-grow-1">
+        <div class="speed-indicator"><strong><span id="speed">---</span></strong> <small>kts(GS)</small></div>
+        <div class="heading-indicator"><strong><span id="heading">---</span></strong></div>
+        <div class="altitude-indicator"><strong><span id="altitude">---</span></strong> <small>ft</small></div>
+        <div class="record-indicator collapse"><strong><span id="record">RECORDING...</span></strong></div>
+
+        <div class="altitude-panel">
+            <div><small>ALT(GPS): <strong><span id="gpsAltitude">99999</span></strong> ft</small></div>
+            <div><small>ALT(BARO): <strong><span id="barometerAltitude">99999</span></strong> ft</small></div>
+            <select id="stationQNH" class="form-control-sm form-select-sm p-0 m-0"
+                onchange="localStorage.setItem('qnh', $('#stationQNH').val());">
+                <option value="1050">1050 (31.01)</option>
+                <option value="1049">1049 (30.98)</option>
+                <option value="1048">1048 (30.95)</option>
+                <option value="1047">1047 (30.92)</option>
+                <option value="1046">1046 (30.89)</option>
+                <option value="1045">1045 (30.86)</option>
+                <option value="1044">1044 (30.83)</option>
+                <option value="1043">1043 (30.80)</option>
+                <option value="1042">1042 (30.77)</option>
+                <option value="1041">1041 (30.74)</option>
+                <option value="1040">1040 (30.71)</option>
+                <option value="1039">1039 (30.68)</option>
+                <option value="1038">1038 (30.65)</option>
+                <option value="1037">1037 (30.62)</option>
+                <option value="1036">1036 (30.59)</option>
+                <option value="1035">1035 (30.56)</option>
+                <option value="1034">1034 (30.53)</option>
+                <option value="1033">1033 (30.50)</option>
+                <option value="1032">1032 (30.47)</option>
+                <option value="1031">1031 (30.45)</option>
+                <option value="1030">1030 (30.42)</option>
+                <option value="1029">1029 (30.39)</option>
+                <option value="1028">1028 (30.36)</option>
+                <option value="1027">1027 (30.33)</option>
+                <option value="1026">1026 (30.30)</option>
+                <option value="1025">1025 (30.27)</option>
+                <option value="1024">1024 (30.24)</option>
+                <option value="1023">1023 (30.21)</option>
+                <option value="1022">1022 (30.18)</option>
+                <option value="1021">1021 (30.15)</option>
+                <option value="1020">1020 (30.12)</option>
+                <option value="1019">1019 (30.09)</option>
+                <option value="1018">1018 (30.06)</option>
+                <option value="1017">1017 (30.03)</option>
+                <option value="1016">1016 (30.00)</option>
+                <option value="1015">1015 (29.97)</option>
+                <option value="1014">1014 (29.94)</option>
+                <option value="1013" selected>STD 1013 (29.92)</option>
+                <option value="1012">1012 (29.88)</option>
+                <option value="1011">1011 (29.85)</option>
+                <option value="1010">1010 (29.83)</option>
+                <option value="1009">1009 (29.80)</option>
+                <option value="1008">1008 (29.77)</option>
+                <option value="1007">1007 (29.74)</option>
+                <option value="1006">1006 (29.71)</option>
+                <option value="1005">1005 (29.68)</option>
+                <option value="1004">1004 (29.65)</option>
+                <option value="1003">1003 (29.62)</option>
+                <option value="1002">1002 (29.59)</option>
+                <option value="1001">1001 (29.56)</option>
+                <option value="1000">1000 (29.53)</option>
+                <option value="0999">0999 (29.50)</option>
+                <option value="0998">0998 (29.47)</option>
+                <option value="0997">0997 (29.44)</option>
+                <option value="0996">0996 (29.41)</option>
+                <option value="0995">0995 (29.38)</option>
+                <option value="0994">0994 (29.35)</option>
+                <option value="0993">0993 (29.32)</option>
+                <option value="0992">0992 (29.29)</option>
+                <option value="0991">0991 (29.26)</option>
+                <option value="0990">0990 (29.23)</option>
+                <option value="0989">0989 (29.21)</option>
+                <option value="0988">0988 (29.18)</option>
+                <option value="0987">0987 (29.15)</option>
+                <option value="0986">0986 (29.12)</option>
+                <option value="0985">0985 (29.09)</option>
+                <option value="0984">0984 (29.06)</option>
+                <option value="0983">0983 (29.03)</option>
+                <option value="0982">0982 (29.00)</option>
+                <option value="0981">0981 (28.97)</option>
+                <option value="0980">0980 (28.94)</option>
+                <option value="0979">0979 (28.91)</option>
+                <option value="0978">0978 (28.88)</option>
+                <option value="0977">0977 (28.85)</option>
+                <option value="0976">0976 (28.82)</option>
+                <option value="0975">0975 (28.79)</option>
+                <option value="0974">0974 (28.76)</option>
+                <option value="0973">0973 (28.73)</option>
+                <option value="0972">0972 (28.70)</option>
+                <option value="0971">0971 (28.67)</option>
+                <option value="0970">0970 (28.64)</option>
+                <option value="0969">0969 (28.61)</option>
+                <option value="0968">0968 (28.59)</option>
+                <option value="0967">0967 (28.56)</option>
+                <option value="0966">0966 (28.53)</option>
+                <option value="0965">0965 (28.50)</option>
+            </select>
+            <div class="collapse"><small>QNH(RKSS): <strong><span id="airportQNH">---</span></strong></small>
+                <button class="btn btn-sm btn-light p-0 m-0"
+                    onclick='$("#stationQNH").val($("#airportQNH").text()); localStorage.setItem("qnh", $("#stationQNH").val());'>set</button>
+            </div>
+            <div><small>Latitude: <strong><span id="latitude">--.------</span></strong></small></div>
+            <div><small>Longitude: <strong><span id="longitude">---.------</span></strong></small></div>
+        </div>
+    </div>
+
+    <!-- Option Modal -->
+    <div class="modal fade" id="option" tabindex="-1" aria-labelledby="optionModalLabel" aria-hidden="true"
+        style="z-index: 10000">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="optionModalLabel">OPTION</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="input-group">
+                        <span class="input-group-text">Track my position</span>
+                        <div class="form-control">
+                            <div class="form-switch form-check">
+                                <input class="form-check-input" type="checkbox" id="trackMyPosition">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <span class="input-group-text">Show altitude by</span>
+                        <div class="form-control">
+                            <span>GPS</span>
+                            <div class="form-switch form-check d-inline-flex">
+                                <input class="form-check-input" type="checkbox" id="altitudeByBarometer">
+                            </div>
+                            <span>BARO</span>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <span class="input-group-text">Show HDG by</span>
+                        <select id="hdgBy" class="form-control form-select">
+                            <option value="gpsWithMagVar">GPS TRK WITH MAG VAR (Magnetic North)</option>
+                            <option value="gps">GPS TRK (True North)</option>
+                            <option value="compass">Compass (Magnetic North)</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <span class="input-group-text">Magnetic Variation</span>
+                        <input type="text" class="form-control" id="magneticVariation" value="-7">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- METAR Modal -->
+    <div class="modal fade" id="metar" tabindex="-1" aria-labelledby="metarModalLabel" aria-hidden="true"
+        style="z-index: 10000">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="metarModalLabel">METAR</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <pre id="metarBody"></pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RADIAL Modal -->
+    <div class="modal fade" id="radial" tabindex="-1" aria-labelledby="radialModalLabel" aria-hidden="true"
+        style="z-index: 10000">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="radialModalLabel">FILL INFO TO DRAW CIRCLE/RADIAL</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="input-group">
+                        <span class="input-group-text">NAVAID/FIX</span>
+                        <input type="text" class="form-control" id="radialNavaid" value="SOT">
+                    </div>
+                    <div class="input-group">
+                        <span class="input-group-text">Radial</span>
+                        <input type="text" class="form-control" id="radialRadial" value="192">
+                    </div>
+                    <div class="input-group">
+                        <span class="input-group-text">Distance(nm)</span>
+                        <input type="text" class="form-control" id="radialDistance" value="21">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Delete All</button>
+                    <button type="button" class="btn btn-success" data-bs-dismiss="modal">Draw!</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SID/STAR Modal -->
+    <div class="modal fade" id="sidstar" tabindex="-1" aria-labelledby="sidstarModalLabel" aria-hidden="true"
+        style="z-index: 10000">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="sidstarModalLabel">SELECT SID/STAR/APPROACH</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <select id="sidstarSelect" style="font-size: 9pt"></select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Delete All</button>
+                    <button type="button" class="btn btn-success" data-bs-dismiss="modal">Draw!</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Privacy Modal -->
+    <div class="modal fade" id="privacy" tabindex="-1" aria-labelledby="privacyModalLabel" aria-hidden="true"
+        style="z-index: 10000">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="privacyModalLabel">Privacy Policy</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>This program does not collect any personal information.</p>
+                    <p>Any personal information that has not been discussed in advance will be destroyed without delay
+                        if the collection is confirmed.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Credit Modal -->
+    <div class="modal fade" id="credit" tabindex="-1" aria-labelledby="creditModalLabel" aria-hidden="true"
+        style="z-index: 10000">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="creditModalLabel">Credits</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <ul>
+                        <li><a href="https://www.flaticon.com/free-icons/airplane" title="airplane icons">Airplane icons
+                                created by Mihimihi - Flaticon</a></li>
+                        <li><a href="https://cordova.apache.org/">Apache Cordova</a></li>
+                        <li><a href="https://jquery.com/">jQuery</a></li>
+                        <li><a href="https://day.js.org/">dayjs</a></li>
+                        <li><a href="https://getbootstrap.com/">bootstrap</a></li>
+                        <li><a href="https://leafletjs.com/">leaflet</a></li>
+                        <li><a href="https://www.openstreetmap.org/">openstreetmap</a></li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terms of use -->
+    <div class="modal fade" id="termsOfUse" tabindex="-1" aria-labelledby="termsOfUseModalLabel" aria-hidden="true"
+        style="z-index: 10000">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="termsOfUseModalLabel">Terms of use</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>You cannot sell or bundle this product itself.</p>
+                    <p>Developer is not responsible for any warranty.</p>
+                    <p>All responsibility arising from using this app lies with you.</p>
+                    <p>Use only for reference when flying.</p>
+                    <p>Contact me for more details.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer bg-primary mt-auto">
+        <div class="container-fluid text-white p-2">
+            <span id="status">zoomlevel</span>
+        </div>
+    </footer>
+
+    <script>
+        var map = null;
+        var isGpsDataReceived = false;
+        var currentLocationMarker = null;
+        var currentLocationAccuracyCircle = null;
+        const maxBounds = L.latLngBounds(L.latLng([38.84978731237103, 123.56280597193731]), L.latLng([33.02870525087617, 132.84627495139412]));
+        var fixToCoordMap = {};
+        var airwayUsedFix = {};
+        var drawnRadialList = [];
+        var drawnProcedureList = [];
+
+        function getIndicatedAltitude(mb, qnh) {
+            return 145366.45 * (Math.pow(qnh / 1013.25, 0.190284) - Math.pow(mb / 1013.25, 0.190284))
+        }
+
+        function onPressureSuccess(pressure) {
+            const altitude = getIndicatedAltitude(pressure, +$("#stationQNH").val());
+
+            $("#barometerAltitude").text(altitude.toFixed(0));
+
+            if ($("#altitudeByBarometer").is(':checked')) {
+                $("#altitude").text(altitude.toFixed(0));
+            }
+        };
+
+        window.addEventListener('message', function(event) {
+            var eventArray = event.data.split("|");
+            var eventType = eventArray.shift();
+
+            if(eventType == "PRESSURE") {
+                onPressureSuccess(eventArray[0]);
+                return;
+            }
+            if(eventType == "GPS") {
+                var gpsData = {
+                    latitude: +eventArray[0],
+                    longitude: +eventArray[1],
+                    altitude: +eventArray[2],
+                    accuracy: +eventArray[3],
+                    heading: +eventArray[4],
+                    speed: (+eventArray[5]) * 1.94384, // kts
+                };
+
+                // geoid conversion
+                gpsData.altitude = (gpsData.altitude - geoidHeight[`${gpsData.latitude.toFixed(0)}/${gpsData.longitude.toFixed(0)}`]) * 3.28084;
+
+                onGPSSuccess(gpsData);
+                return;
+            }
+
+            Android.showToast(event.data); // for debug
+        });
+
+        function onGPSSuccess(position) {
+            $("#gpsAltitude").text(position.altitude.toFixed(0));
+            if (!$("#altitudeByBarometer").is(':checked')) {
+                $("#altitude").text(position.altitude.toFixed(0));
+            }
+            $("#speed").text(position.speed.toFixed(0));
+
+            if ($("#hdgBy").val() == "gpsWithMagVar") {
+                $("#heading").text((position.heading - +$("#magneticVariation").val()).toFixed(0));
+            }
+            if ($("#hdgBy").val() == "gps") {
+                $("#heading").text(position.heading.toFixed(0));
+            }
+
+            $("#latitude").text(position.latitude);
+            $("#longitude").text(position.longitude);
+
+            if (map == null)
+                return;
+
+            currentLocationMarker.setLatLng([position.latitude, position.longitude]).setRotationAngle(position.heading);
+            currentLocationAccuracyCircle.setLatLng([position.latitude, position.longitude]).setRadius(position.accuracy);
+
+            if ($("#trackMyPosition").is(':checked')) {
+                map.panTo([position.latitude, position.longitude], { animate: true });
+            }
+
+            if(!isGpsDataReceived) {
+                map.panTo([position.latitude, position.longitude], { animate: true });
+                isGpsDataReceived = true;
+            }
+
+            updateStatusBar();
+
+            // log current position
+            /*
+            if($(".record-indicator").is(":visible")) {
+                appendFile("nuefans-postion-log.txt", `${dayjs().format("YYYY-MM-DD HH:mm:ss")},${position.coords.latitude},${position.coords.longitude},${position.coords.altitude},${position.coords.speed},${position.coords.heading}`);
+            }
+            */
+        }
+
+        function error(err) {
+            $("#status").text(`errA: ${err.code}`);
+            // alert(err);
+            console.error(`ERROR(${err.code}): ${err.message}`);
+        }
+
+        function updateStatusBar() {
+            var zoomText = "(just magnified)";
+
+            if (map.getZoom() <= 12) {
+                zoomText = "(korea only)";
+            }
+
+            if (map.getZoom() <= 7) {
+                zoomText = "(whole world)";
+            }
+
+            $("#status").html(`zoomlevel: ${map.getZoom()} ${zoomText}`);
+        }
+
+        function onZoomEnd(e) {
+            updateStatusBar();
+        }
+
+        function updateCompassHeading(eventData) {
+            if ($("#hdgBy").val() == "compass") {
+                $("#heading").text(eventData.alpha.toFixed(0));
+            }
+        }
+
+        function convertMinutesToDecimal(str) {
+            function MinutesToDecimal(d, m, s) {
+                y = parseFloat(d) + parseFloat(m) / 60 + parseFloat(s) / 3600;
+                return y;
+            };
+
+            var prefix = str[0];
+
+            str = str.substr(1);
+
+            var tokens = str.split(".");
+
+            var ret = MinutesToDecimal(tokens[0], tokens[1], +(tokens[2] + "." + tokens[3]));
+            if (prefix == 'S' || prefix == 'W')
+                ret = -ret;
+
+            return ret;
+        };
+
+        function convertDegreesToRadians(deg) {
+            return (deg * Math.PI / 180.0);
+        }
+
+        function convertRadiansToDegrees(rad) {
+            return (rad / Math.PI * 180.0);
+        }
+
+        function calculateLatLongByBearingDistance(lat1, lon1, bearing, dist) {
+            var rEarth = 3440.07; // 3440 nm, 6371.01km;
+            lat1 = convertDegreesToRadians(lat1);
+            lon1 = convertDegreesToRadians(lon1);
+            bearing = convertDegreesToRadians(bearing);
+            dist_ratio = dist / rEarth;
+            var lat = Math.asin(Math.sin(lat1) * Math.cos(dist_ratio) + Math.cos(lat1) * Math.sin(dist_ratio) * Math.cos(bearing));
+            var lon;
+            if (Math.cos(lat) == 0) {
+                // Endpoint a pole 
+                lon = lon1;
+            }
+            else {
+                lon = lon1 + Math.atan2(Math.sin(bearing) * Math.sin(dist_ratio) * Math.cos(lat1), Math.cos(dist_ratio) - Math.sin(lat1) * Math.sin(lat));
+            }
+            lat = convertRadiansToDegrees(lat);
+            lon = convertRadiansToDegrees(lon);
+            return [lat, lon];
+        }
+
+        function drawRadial() {
+            var e = window.navaidMap[$("#radialNavaid").val()];
+
+            var circle = L.circle([convertMinutesToDecimal(e.latitude), convertMinutesToDecimal(e.longitude)], { radius: $("#radialDistance").val() * 1852, fill: false }).addTo(map);
+
+            var latLng = calculateLatLongByBearingDistance(convertMinutesToDecimal(e.latitude), convertMinutesToDecimal(e.longitude), +$("#radialRadial").val() + +$("#magneticVariation").val(), $("#radialDistance").val() * 3);
+            var line = L.polyline([[convertMinutesToDecimal(e.latitude), convertMinutesToDecimal(e.longitude)], latLng], { weight: 4 }).addTo(map);
+
+            drawnRadialList.push([circle, line]);
+        }
+
+        function deleteAllRadial() {
+            drawnRadialList.forEach(e => {
+                map.removeLayer(e[0]);
+                map.removeLayer(e[1]);
+            });
+
+            drawnRadialList = [];
+        }
+
+        function drawProcedure() {
+            var selectedProcedure = window.procedureList[$("#sidstarSelect").val()];
+
+            for (var a = 0; a < selectedProcedure.fixList.length - 1; a++) {
+                var e1, e2;
+
+                if (selectedProcedure.fixList[a].length > 10) {
+                    e1 = {
+                        latitude: selectedProcedure.fixList[a].split(" ")[0],
+                        longitude: selectedProcedure.fixList[a].split(" ")[1]
+                    }
+                }
+                else {
+                    e1 = window.navaidMap[selectedProcedure.fixList[a]];
+                }
+
+                if (selectedProcedure.fixList[a + 1].length > 10) {
+                    e2 = {
+                        latitude: selectedProcedure.fixList[a + 1].split(" ")[0],
+                        longitude: selectedProcedure.fixList[a + 1].split(" ")[1]
+                    }
+                }
+                else {
+                    e2 = window.navaidMap[selectedProcedure.fixList[a + 1]];
+                }
+
+                var latLng1 = [convertMinutesToDecimal(e1.latitude), convertMinutesToDecimal(e1.longitude)];
+                var latLng2 = [convertMinutesToDecimal(e2.latitude), convertMinutesToDecimal(e2.longitude)];
+                var line = L.polyline([latLng1, latLng2], { weight: 4 }).addTo(map);
+                drawnProcedureList.push(line);
+            }
+        }
+
+        function deleteAllProcedure() {
+            drawnProcedureList.forEach(e => {
+                map.removeLayer(e);
+            });
+
+            drawnProcedureList = [];
+        }
+
+        function updateMetarFromLocalStroage() {
+            $("#metarBody").text(localStorage.getItem("metar"));
+        }
+
+        function updateMetar() {
+            $.getJSON('https://lancard.github.io/get_metar/metar.json', function (ret) {
+                var metarList = "";
+                for (var airport in ret) {
+                    if (airport == "RKSS") {
+                        var metarObject = metarParser(ret[airport]);
+                        $("#airportQNH").text(metarObject.altimeter.millibars);
+                        $("#airportQNH").parents("div").show();
+                    }
+                    metarList += `${airport}: ${ret[airport]}\n`;
+                }
+                localStorage.setItem("metar", metarList);
+                updateMetarFromLocalStroage();
+            });
+        }
+
+        function init() {
+            if (localStorage.getItem('qnh')) {
+                $("#stationQNH").val(localStorage.getItem('qnh'));
+            }
+
+            map = L.map('map',
+                {
+                    center: [37.55748666666666, 126.79195416666667],
+                    zoom: 11
+                }
+            );
+            updateStatusBar();
+            map.on("zoomend", onZoomEnd);
+
+            // add markers
+            currentLocationMarker = L.marker([37.55748666666666, 126.79195416666667], {
+                rotationAngle: 45,
+                rotationOrigin: 'center',
+                icon: L.divIcon({ className: 'airplane-icon', html: '<div class="airplane-icon-inner"><img src="images/airplane.svg"></div>' })
+            })
+            currentLocationMarker.addTo(map);
+
+            currentLocationAccuracyCircle = L.circle([37.55748666666666, 126.79195416666667], { radius: 100, color: '#990000', stroke: 'red' })
+                // .bindTooltip(`${latitude}<br>${longitude}`, { direction: "bottom", permanent: true })
+                .addTo(map);
+
+
+
+            L.tileLayer('tiles/{z}/{x}/{y}.png', {
+                maxNativeZoom: 12,
+                errorTileUrl: 'images/notfound.png',
+                attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OSM</a> | source on <a href="https://github.com/lancard">github</a>'
+            }).addTo(map);
+
+            window.addEventListener('deviceorientation', updateCompassHeading);
+            setInterval(() => {
+                window.removeEventListener('deviceorientation', updateCompassHeading);
+                window.addEventListener('deviceorientation', updateCompassHeading);
+            }, 60 * 1000); // 1 minutes
+
+            updateMetarFromLocalStroage();
+            updateMetar();
+            setInterval(updateMetar, 10 * 60000); // 10 minutes
+
+            // event handler
+            $.getJSON('database/navaid.json', function (ret) {
+                window.navaidMap = {};
+                ret.forEach(e => {
+                    window.navaidMap[e.name] = e;
+                });
+                $("#radial").find("button.btn-success").on('click', drawRadial);
+                $("#radial").find("button.btn-danger").on('click', deleteAllRadial);
+            });
+
+            // event handler
+            $.getJSON('database/procedure.json', function (ret) {
+                ret.sort((a, b) => {
+                    if (a.airport < b.airport)
+                        return -1;
+                    if (a.airport > b.airport)
+                        return 1;
+                    if (a.procedureType < b.procedureType)
+                        return -1;
+                    if (a.procedureType > b.procedureType)
+                        return 1;
+                    if (a.name < b.name)
+                        return -1;
+                    if (a.name > b.name)
+                        return 1;
+
+                    return 0;
+                });
+
+                window.procedureList = {};
+                ret.forEach(e => {
+                    window.procedureList[e.name] = e;
+                    var $option = $("<option></option>");
+                    $option.attr("value", e.name);
+                    $option.text(`${e.airport}-${e.procedureType}-${e.name}`);
+                    $option.appendTo("#sidstarSelect");
+                });
+
+                $("#sidstarSelect").val("BULTI2T");
+                $("#sidstar").find("button.btn-success").on('click', drawProcedure);
+                $("#sidstar").find("button.btn-danger").on('click', deleteAllProcedure);
+            });
+        }
+
+        init();
+    </script>
+</body>
+
+</html>
