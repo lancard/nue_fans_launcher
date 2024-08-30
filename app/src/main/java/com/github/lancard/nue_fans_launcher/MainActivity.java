@@ -14,7 +14,6 @@ import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
-import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebMessage;
 import android.webkit.WebSettings;
@@ -25,6 +24,7 @@ import android.widget.Toast;
 import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
@@ -32,13 +32,14 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 
+/** @noinspection FieldCanBeLocal*/
 public class MainActivity extends AppCompatActivity implements LocationListener, SensorEventListener {
     private WebView webView;
+    private WebAppInterface webAppInterface;
     private SensorManager sensorManager;
+    private LocationManager locationManager;
+    private float lastBearing = 0.0f;
     private final static String startUrl = "file:///android_asset/www/index.html";
-
-
-
 
     // sensor start -----------------------------------------------
     private void initializeSensor() {
@@ -48,18 +49,7 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        sendMessageToWebView("PRESSURE|%f".formatted(event.values[0]));
-        /*
-        // for gps debug
-        sendMessageToWebView("GPS|%f|%f|%f|%f|%f|%f".formatted(
-                36.55748666666666,
-                126.79195416666667,
-                54.1232,
-                10.0,
-                152.23,
-                123.33
-        ));
-        */
+        sendMessageToWebView("PRESSURE|" + event.values[0]);
     }
 
     @Override
@@ -68,91 +58,77 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
     // sensor end -----------------------------------------------
 
 
-
     // gps start -----------------------------------------------
     private void checkLocationPermission() {
         ActivityResultLauncher<String[]> locationPermissionRequest =
                 registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-                            Boolean fineLocationGranted = result.getOrDefault(
-                                    Manifest.permission.ACCESS_FINE_LOCATION, false);
-                            Boolean coarseLocationGranted = result.getOrDefault(
-                                    Manifest.permission.ACCESS_COARSE_LOCATION, false);
-                            if (fineLocationGranted != null && fineLocationGranted) {
-                                // Precise location access granted.
-                            } else if (coarseLocationGranted != null && coarseLocationGranted) {
-                                // Only approximate location access granted.
-                            } else {
-                                // No location access granted.
+                            Boolean fineLocationGranted = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
+
+                            if (fineLocationGranted == null || !fineLocationGranted) {
+                                this.finishAffinity();
                             }
                         }
                 );
 
         boolean coarseLocationGranted = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED;
+                this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
 
         boolean fineLocationGranted = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED;
+                this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
 
-
-        // Before you perform the actual permission request, check whether your app
-        // already has the permissions, and whether your app needs to show a permission
-        // rationale dialog. For more details, see (link)Request permissions.(구글개발자)
-        if (!coarseLocationGranted && !fineLocationGranted) {
+        if (!coarseLocationGranted || !fineLocationGranted) {
             locationPermissionRequest.launch(new String[]{
                     Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION
             });
         } else {
-            startLocationUpdates();
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
         }
     }
 
-    private void startLocationUpdates() {
-        LocationManager locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+    private void initializeLocation() {
+        locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
 
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            return;
-        }
-
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
+        checkLocationPermission();
     }
 
     @Override
-    public void onLocationChanged(Location location) {
+    public void onLocationChanged(@NonNull Location location) {
         try {
-            sendMessageToWebView("GPS|%f|%f|%f|%f|%f|%f|%d".formatted(
-                    location.getLatitude(),
-                    location.getLongitude(),
-                    location.getAltitude(),
-                    location.getAccuracy(),
-                    location.getBearing(),
-                    location.getSpeed(),
+            float bearing = location.getBearing();
+            if (location.getSpeed() < 0.001f) {
+                bearing = lastBearing;
+            } else {
+                lastBearing = bearing;
+            }
+            if (bearing > 360.0f) {
+                bearing -= 360.0f;
+            }
+
+            sendMessageToWebView("GPS|" +
+                    location.getLatitude() + "|" +
+                    location.getLongitude() + "|" +
+                    location.getAltitude() + "|" +
+                    location.getAccuracy() + "|" +
+                    bearing + "|" +
+                    location.getSpeed() + "|" +
                     location.getTime()
-            ));
-        }
-        catch(Exception e) {
+            );
+        } catch (Exception e) {
             sendMessageToWebView(e.toString());
         }
     }
     // gps end -----------------------------------------------
 
 
-
-
-    // webview start -----------------------------------------
+    // web view start -----------------------------------------
     @SuppressLint("SetJavaScriptEnabled")
     private void initializeWebView() {
-        webView = (WebView) findViewById(R.id.webview);
+        webView = findViewById(R.id.webview);
 
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
-        webSettings.setAllowFileAccessFromFileURLs(true);
-        webSettings.setAllowUniversalAccessFromFileURLs(true);
 
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
@@ -161,8 +137,7 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
     private void sendMessageToWebView(String message) {
         webView.postWebMessage(new WebMessage(message), Uri.parse("*"));
     }
-    // webview end -----------------------------------------
-
+    // web view end -----------------------------------------
 
 
     @Override
@@ -178,12 +153,14 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
         });
 
         initializeSensor();
-        checkLocationPermission();
+        initializeLocation();
         initializeWebView();
 
         // link Javascript interface
-        webView.addJavascriptInterface(new WebAppInterface(this), "Android");
+        webAppInterface = new WebAppInterface(this);
+        webView.addJavascriptInterface(webAppInterface, "NueFANS");
         webView.loadUrl(startUrl);
+
         Log.d("main", "nue fans launched!");
         Toast.makeText(MainActivity.this, "nue fans launched!", Toast.LENGTH_SHORT).show();
     }

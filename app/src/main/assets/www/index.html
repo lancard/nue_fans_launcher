@@ -15,7 +15,7 @@
     <script src="leaflet/leaflet.js"></script>
     <script src="leaflet/leaflet.textpath.js"></script>
     <script src="leaflet/leaflet.rotatedMarker.js"></script>
-    <script src="jquery/jquery-3.6.1.min.js"></script>
+    <script src="jquery/jquery-3.7.1.min.js"></script>
     <script src="metarparser/metarParser.js"></script>
 
     <link rel="stylesheet" href="leaflet/leaflet.css" />
@@ -114,7 +114,7 @@
                             data-bs-target="#metar">METAR</button>
                         <button type="button" class="btn btn-sm p-1 btn-warning" data-bs-toggle="modal"
                             data-bs-target="#option">OPTION</button>
-                        <button type="button" class="btn btn-sm p-1 btn-danger" onclick='$(".record-indicator").toggle();'>REC ●</button>
+                        <button type="button" class="btn btn-sm p-1 btn-danger" onclick='toggleRecord();'>REC ●</button>
                     </div>
                     <div class="m-2">
                         <button type="button" class="btn btn-sm p-1 btn-info" data-bs-toggle="modal"
@@ -239,7 +239,7 @@
             </div>
             <div><small>Latitude: <strong><span id="latitude">--.------</span></strong></small></div>
             <div><small>Longitude: <strong><span id="longitude">---.------</span></strong></small></div>
-            <div><small>Time: <strong><span id="gpsTime">-</span></strong></small></div>
+            <div><small>LastTime: <strong><span id="gpsTime">-</span></strong></small></div>
         </div>
     </div>
 
@@ -393,9 +393,6 @@
                 </div>
                 <div class="modal-body">
                     <ul>
-                        <li><a href="https://www.flaticon.com/free-icons/airplane" title="airplane icons">Airplane icons
-                                created by Mihimihi - Flaticon</a></li>
-                        <li><a href="https://cordova.apache.org/">Apache Cordova</a></li>
                         <li><a href="https://jquery.com/">jQuery</a></li>
                         <li><a href="https://day.js.org/">dayjs</a></li>
                         <li><a href="https://getbootstrap.com/">bootstrap</a></li>
@@ -490,7 +487,7 @@
                 return;
             }
 
-            Android.showToast(event.data); // for debug
+            NueFANS.showToast(event.data); // for debug
         });
 
         function onGPSSuccess(position) {
@@ -509,7 +506,7 @@
 
             $("#latitude").text(position.latitude);
             $("#longitude").text(position.longitude);
-            $("#gpsTime").text(dayjs.unix(position.time).format("HH:mm:ss"));
+            $("#gpsTime").text(dayjs(position.time).format("HH:mm:ss"));
 
             if (map == null)
                 return;
@@ -529,17 +526,17 @@
             updateStatusBar();
 
             // log current position
-            /*
             if($(".record-indicator").is(":visible")) {
-                appendFile("nuefans-postion-log.txt", `${dayjs().format("YYYY-MM-DD HH:mm:ss")},${position.coords.latitude},${position.coords.longitude},${position.coords.altitude},${position.coords.speed},${position.coords.heading}`);
+                NueFANS.appendFile(`${dayjs().format("YYYY-MM-DD HH:mm:ss")},${position.latitude},${position.longitude},${position.altitude},${position.speed},${position.heading}`);
             }
-            */
         }
 
-        function error(err) {
-            $("#status").text(`errA: ${err.code}`);
-            // alert(err);
-            console.error(`ERROR(${err.code}): ${err.message}`);
+        function toggleRecord() {
+            $(".record-indicator").toggle();
+
+            if(!$(".record-indicator").is(":visible")) {
+                NueFANS.showToast("'nue-fans-log.txt' file saved in download folder");
+            }
         }
 
         function updateStatusBar() {
