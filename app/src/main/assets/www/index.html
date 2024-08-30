@@ -239,6 +239,7 @@
             </div>
             <div><small>Latitude: <strong><span id="latitude">--.------</span></strong></small></div>
             <div><small>Longitude: <strong><span id="longitude">---.------</span></strong></small></div>
+            <div><small>Time: <strong><span id="gpsTime">-</span></strong></small></div>
         </div>
     </div>
 
@@ -479,6 +480,7 @@
                     accuracy: +eventArray[3],
                     heading: +eventArray[4],
                     speed: (+eventArray[5]) * 1.94384, // kts
+                    time: +eventArray[6]
                 };
 
                 // geoid conversion
@@ -507,6 +509,7 @@
 
             $("#latitude").text(position.latitude);
             $("#longitude").text(position.longitude);
+            $("#gpsTime").text(dayjs.unix(position.time).format("HH:mm:ss"));
 
             if (map == null)
                 return;

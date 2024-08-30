@@ -124,13 +124,14 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
     @Override
     public void onLocationChanged(Location location) {
         try {
-            sendMessageToWebView("GPS|%f|%f|%f|%f|%f|%f".formatted(
+            sendMessageToWebView("GPS|%f|%f|%f|%f|%f|%f|%d".formatted(
                     location.getLatitude(),
                     location.getLongitude(),
                     location.getAltitude(),
                     location.getAccuracy(),
                     location.getBearing(),
-                    location.getSpeed()
+                    location.getSpeed(),
+                    location.getTime()
             ));
         }
         catch(Exception e) {
