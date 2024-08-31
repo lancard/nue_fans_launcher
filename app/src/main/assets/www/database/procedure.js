@@ -1,3 +1,4 @@
+var procedures =
 [
     {
         "procedureType": "APPROACH",
@@ -8178,4 +8179,4 @@
             "MILOO"
         ]
     }
-]
+];

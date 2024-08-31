@@ -18,7 +18,6 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebMessage;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -130,7 +129,7 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
 
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient(this));
         webView.setWebChromeClient(new WebChromeClient());
     }
 

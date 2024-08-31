@@ -9,6 +9,8 @@
 
     <link rel="stylesheet" href="bootstrap/bootstrap.min.css">
 
+    <script src="database/navaid.js"></script>
+    <script src="database/procedure.js"></script>
     <script src="dayjs/dayjs.min.js"></script>
     <script src="bootstrap/bootstrap.bundle.min.js"></script>
     <script src="geoid.js"></script>
@@ -262,6 +264,14 @@
                         </div>
                     </div>
                     <div class="input-group">
+                        <span class="input-group-text">Consider geoid</span>
+                        <div class="form-control">
+                            <div class="form-switch form-check">
+                                <input class="form-check-input" type="checkbox" id="considerGeoid" checked>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="input-group">
                         <span class="input-group-text">Show altitude by</span>
                         <div class="form-control">
                             <span>GPS</span>
@@ -444,6 +454,8 @@
         const maxBounds = L.latLngBounds(L.latLng([38.84978731237103, 123.56280597193731]), L.latLng([33.02870525087617, 132.84627495139412]));
         var fixToCoordMap = {};
         var airwayUsedFix = {};
+        var navaidMap = {};
+        var procedureMap = {};
         var drawnRadialList = [];
         var drawnProcedureList = [];
 
@@ -480,9 +492,6 @@
                     time: +eventArray[6]
                 };
 
-                // geoid conversion
-                gpsData.altitude = (gpsData.altitude - geoidHeight[`${gpsData.latitude.toFixed(0)}/${gpsData.longitude.toFixed(0)}`]) * 3.28084;
-
                 onGPSSuccess(gpsData);
                 return;
             }
@@ -491,19 +500,38 @@
         });
 
         function onGPSSuccess(position) {
-            $("#gpsAltitude").text(position.altitude.toFixed(0));
-            if (!$("#altitudeByBarometer").is(':checked')) {
-                $("#altitude").text(position.altitude.toFixed(0));
+            // altitude conversion ---------------------------------------
+            var altitude = position.altitude;
+
+            // geoid conversion
+            if ($("#trackMyPosition").is(':checked')) {
+                altitude = (position.altitude - geoidHeight[`${gpsData.latitude.toFixed(0)}/${gpsData.longitude.toFixed(0)}`]);
             }
-            $("#speed").text(position.speed.toFixed(0));
+
+            // convert altitude from meters to feets
+            altitude = altitude * 3.28084;
+
+            $("#gpsAltitude").text(altitude.toFixed(0));
+
+            if (!$("#altitudeByBarometer").is(':checked')) {
+                $("#altitude").text(altitude.toFixed(0));
+            }
+
+            // heading conversion ---------------------------------------
+            var heading = position.heading;
 
             if ($("#hdgBy").val() == "gpsWithMagVar") {
-                $("#heading").text((position.heading - +$("#magneticVariation").val()).toFixed(0));
+                heading = position.heading - +$("#magneticVariation").val();
             }
             if ($("#hdgBy").val() == "gps") {
-                $("#heading").text(position.heading.toFixed(0));
+                heading = position.heading;
             }
 
+            $("#heading").text(heading.toFixed(0));
+
+
+            // others ---------------------------------------
+            $("#speed").text(position.speed.toFixed(0));
             $("#latitude").text(position.latitude);
             $("#longitude").text(position.longitude);
             $("#gpsTime").text(dayjs(position.time).format("HH:mm:ss"));
@@ -527,7 +555,7 @@
 
             // log current position
             if($(".record-indicator").is(":visible")) {
-                NueFANS.appendFile(`${dayjs().format("YYYY-MM-DD HH:mm:ss")},${position.latitude},${position.longitude},${position.altitude},${position.speed},${position.heading}`);
+                NueFANS.appendFile(`${dayjs().format("YYYY-MM-DD HH:mm:ss")},${position.latitude},${position.longitude},${altitude},${position.speed},${heading}`);
             }
         }
 
@@ -631,7 +659,7 @@
         }
 
         function drawProcedure() {
-            var selectedProcedure = window.procedureList[$("#sidstarSelect").val()];
+            var selectedProcedure = procedureMap[$("#sidstarSelect").val()];
 
             for (var a = 0; a < selectedProcedure.fixList.length - 1; a++) {
                 var e1, e2;
@@ -692,6 +720,48 @@
         }
 
         function init() {
+            // event handler
+            $("#radial").find("button.btn-success").on('click', drawRadial);
+            $("#radial").find("button.btn-danger").on('click', deleteAllRadial);
+            $("#sidstar").find("button.btn-success").on('click', drawProcedure);
+            $("#sidstar").find("button.btn-danger").on('click', deleteAllProcedure);
+
+            // sort procedures
+            procedures.sort((a, b) => {
+                if (a.airport < b.airport)
+                    return -1;
+                if (a.airport > b.airport)
+                    return 1;
+                if (a.procedureType < b.procedureType)
+                    return -1;
+                if (a.procedureType > b.procedureType)
+                    return 1;
+                if (a.name < b.name)
+                    return -1;
+                if (a.name > b.name)
+                    return 1;
+
+                return 0;
+            });
+
+            // generate map
+            navaids.forEach(e => {
+                navaidMap[e.name] = e;
+            });
+            procedures.forEach(e => {
+                procedureMap[e.name] = e;
+            });
+
+            // add procedure items into select box
+            procedures.forEach(e => {
+                var $option = $("<option></option>");
+                $option.attr("value", e.name);
+                $option.text(`${e.airport}-${e.procedureType}-${e.name}`);
+                $option.appendTo("#sidstarSelect");
+            });
+            $("#sidstarSelect").val("BULTI2T");
+
+
             if (localStorage.getItem('qnh')) {
                 $("#stationQNH").val(localStorage.getItem('qnh'));
             }
@@ -731,52 +801,10 @@
                 window.addEventListener('deviceorientation', updateCompassHeading);
             }, 60 * 1000); // 1 minutes
 
+
             updateMetarFromLocalStroage();
             updateMetar();
             setInterval(updateMetar, 10 * 60000); // 10 minutes
-
-            // event handler
-            $.getJSON('database/navaid.json', function (ret) {
-                window.navaidMap = {};
-                ret.forEach(e => {
-                    window.navaidMap[e.name] = e;
-                });
-                $("#radial").find("button.btn-success").on('click', drawRadial);
-                $("#radial").find("button.btn-danger").on('click', deleteAllRadial);
-            });
-
-            // event handler
-            $.getJSON('database/procedure.json', function (ret) {
-                ret.sort((a, b) => {
-                    if (a.airport < b.airport)
-                        return -1;
-                    if (a.airport > b.airport)
-                        return 1;
-                    if (a.procedureType < b.procedureType)
-                        return -1;
-                    if (a.procedureType > b.procedureType)
-                        return 1;
-                    if (a.name < b.name)
-                        return -1;
-                    if (a.name > b.name)
-                        return 1;
-
-                    return 0;
-                });
-
-                window.procedureList = {};
-                ret.forEach(e => {
-                    window.procedureList[e.name] = e;
-                    var $option = $("<option></option>");
-                    $option.attr("value", e.name);
-                    $option.text(`${e.airport}-${e.procedureType}-${e.name}`);
-                    $option.appendTo("#sidstarSelect");
-                });
-
-                $("#sidstarSelect").val("BULTI2T");
-                $("#sidstar").find("button.btn-success").on('click', drawProcedure);
-                $("#sidstar").find("button.btn-danger").on('click', deleteAllProcedure);
-            });
         }
 
         init();

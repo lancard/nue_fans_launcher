@@ -1,3 +1,4 @@
+var navaids =
 [
 	{
 		"name": "JOOKA",
@@ -11004,4 +11005,4 @@
 		"longitude": "E126.37.14.600",
 		"airport": "RKJK"
 	}
-]
+];
