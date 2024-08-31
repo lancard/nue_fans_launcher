@@ -104,7 +104,7 @@
 <body class="d-flex flex-column min-vh-100">
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#" onclick="location.reload();">FANS</a>
+            <a class="navbar-brand" href="#">FANS</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarColor01"
                 aria-controls="navbarColor01" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
@@ -144,8 +144,9 @@
         <div class="record-indicator collapse"><strong><span id="record">RECORDING...</span></strong></div>
 
         <div class="altitude-panel">
-            <div><small>ALT(GPS): <strong><span id="gpsAltitude">99999</span></strong> ft</small></div>
-            <div><small>ALT(BARO): <strong><span id="barometerAltitude">99999</span></strong> ft</small></div>
+            <div><small>ALT(GPS): <strong><span id="gpsAltitude">-</span></strong> ft</small></div>
+            <div><small>GEOID: <strong><span id="geoid">-</span></strong> ft</small></div>
+            <div><small>ALT(BARO): <strong><span id="barometerAltitude">-</span></strong> ft</small></div>
             <select id="stationQNH" class="form-control-sm form-select-sm p-0 m-0"
                 onchange="localStorage.setItem('qnh', $('#stationQNH').val());">
                 <option value="1050">1050 (31.01)</option>
@@ -502,16 +503,19 @@
         function onGPSSuccess(position) {
             // altitude conversion ---------------------------------------
             var altitude = position.altitude;
+            var geoid = geoidHeight[`${position.latitude.toFixed(0)}/${position.longitude.toFixed(0)}`];
 
             // geoid conversion
-            if ($("#trackMyPosition").is(':checked')) {
-                altitude = (position.altitude - geoidHeight[`${gpsData.latitude.toFixed(0)}/${gpsData.longitude.toFixed(0)}`]);
+            if ($("#considerGeoid").is(':checked')) {
+                altitude = position.altitude - geoid;
             }
 
-            // convert altitude from meters to feets
+            // convert altitude, geoid from meters to feets
             altitude = altitude * 3.28084;
+            geoid = geoid * 3.28084;
 
             $("#gpsAltitude").text(altitude.toFixed(0));
+            $("#geoid").text(geoid.toFixed(0));
 
             if (!$("#altitudeByBarometer").is(':checked')) {
                 $("#altitude").text(altitude.toFixed(0));
@@ -527,7 +531,9 @@
                 heading = position.heading;
             }
 
-            $("#heading").text(heading.toFixed(0));
+            if ($("#hdgBy").val() != "compass") {
+                $("#heading").text(heading.toFixed(0));
+            }
 
 
             // others ---------------------------------------
