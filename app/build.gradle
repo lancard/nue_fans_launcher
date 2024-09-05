@@ -10,8 +10,8 @@ android {
         applicationId "com.github.lancard.nue_fans_launcher"
         minSdk 34
         targetSdk 34
-        versionCode 51
-        versionName "1.51"
+        versionCode 53
+        versionName "1.53"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -41,7 +41,7 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
     private final static String startUrl = "file:///android_asset/www/index.html";
 
     // sensor start -----------------------------------------------
-    private void initializeSensor() {
+    public void initializeSensor() {
         sensorManager = (SensorManager) this.getSystemService(Context.SENSOR_SERVICE);
         sensorManager.registerListener(this, sensorManager.getSensorList(Sensor.TYPE_PRESSURE).get(0), SensorManager.SENSOR_DELAY_FASTEST);
     }
@@ -59,16 +59,6 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
 
     // gps start -----------------------------------------------
     private void checkLocationPermission() {
-        ActivityResultLauncher<String[]> locationPermissionRequest =
-                registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-                            Boolean fineLocationGranted = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
-
-                            if (fineLocationGranted == null || !fineLocationGranted) {
-                                this.finishAffinity();
-                            }
-                        }
-                );
-
         boolean coarseLocationGranted = ContextCompat.checkSelfPermission(
                 this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
 
@@ -76,16 +66,31 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
                 this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
 
         if (!coarseLocationGranted || !fineLocationGranted) {
+            ActivityResultLauncher<String[]> locationPermissionRequest =
+                    registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
+                                Boolean fineLocationGrantedResult = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
+
+                                if (fineLocationGrantedResult == null || !fineLocationGrantedResult) {
+                                    this.finishAffinity();
+                                    return;
+                                }
+
+                                initializeWebView();
+                                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
+                            }
+                    );
+
             locationPermissionRequest.launch(new String[]{
                     Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION
             });
         } else {
+            initializeWebView();
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
         }
     }
 
-    private void initializeLocation() {
+    public void initializeLocation() {
         locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
 
         checkLocationPermission();
@@ -122,7 +127,7 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
 
     // web view start -----------------------------------------
     @SuppressLint("SetJavaScriptEnabled")
-    private void initializeWebView() {
+    public void initializeWebView() {
         webView = findViewById(R.id.webview);
 
         WebSettings webSettings = webView.getSettings();
@@ -131,10 +136,20 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
 
         webView.setWebViewClient(new WebViewClient(this));
         webView.setWebChromeClient(new WebChromeClient());
+
+        // link Javascript interface
+        webAppInterface = new WebAppInterface(this);
+        webView.addJavascriptInterface(webAppInterface, "NueFANS");
+        webView.loadUrl(startUrl);
     }
 
     private void sendMessageToWebView(String message) {
-        webView.postWebMessage(new WebMessage(message), Uri.parse("*"));
+        try {
+            webView.postWebMessage(new WebMessage(message), Uri.parse("*"));
+        }
+        catch(Exception e) {
+            Log.e("main", e.toString());
+        }
     }
     // web view end -----------------------------------------
 
@@ -153,14 +168,5 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
 
         initializeSensor();
         initializeLocation();
-        initializeWebView();
-
-        // link Javascript interface
-        webAppInterface = new WebAppInterface(this);
-        webView.addJavascriptInterface(webAppInterface, "NueFANS");
-        webView.loadUrl(startUrl);
-
-        Log.d("main", "nue fans launched!");
-        Toast.makeText(MainActivity.this, "nue fans launched!", Toast.LENGTH_SHORT).show();
     }
 }

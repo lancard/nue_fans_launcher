@@ -10,9 +10,9 @@ import android.webkit.WebView;
 import android.widget.Toast;
 
 public class WebViewClient extends android.webkit.WebViewClient {
-    Context context;
+    MainActivity context;
 
-    public WebViewClient(Context _context) {
+    public WebViewClient(MainActivity _context) {
         context = _context;
     }
 
@@ -22,5 +22,11 @@ public class WebViewClient extends android.webkit.WebViewClient {
         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(request.getUrl().toString()));
         context.startActivity(intent);
         return true;
+    }
+
+    @Override
+    public void onPageFinished(WebView view, String url) {
+        Log.d("main", "nue fans launched!");
+        Toast.makeText(context, "nue fans launched!", Toast.LENGTH_SHORT).show();
     }
 }
