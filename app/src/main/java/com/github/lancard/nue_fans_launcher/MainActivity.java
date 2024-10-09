@@ -45,9 +45,18 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
     private final static String startUrl = "file:///android_asset/www/index.html";
 
     // sensor start -----------------------------------------------
-    public void initializeSensor() {
-        sensorManager = (SensorManager) this.getSystemService(Context.SENSOR_SERVICE);
-        sensorManager.registerListener(this, sensorManager.getSensorList(Sensor.TYPE_PRESSURE).get(0), SensorManager.SENSOR_DELAY_FASTEST);
+    private void initializeSensor() {
+        try {
+            sensorManager = (SensorManager) this.getSystemService(Context.SENSOR_SERVICE);
+            Sensor pressureSensor = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE);
+            if (pressureSensor != null) {
+                sensorManager.registerListener(this, pressureSensor, SensorManager.SENSOR_DELAY_FASTEST);
+            } else {
+                Toast.makeText(this, "Pressure sensor not available. baro altimeter service not available.", Toast.LENGTH_SHORT).show();
+            }
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error initializing sensor: " + e.getMessage());
+        }
     }
 
     @Override
@@ -69,36 +78,44 @@ public class MainActivity extends AppCompatActivity implements LocationListener,
     }
 
     private void requestLocationPermissionAndStartUpdate() {
-        // 일단 먼저 권한이 있는지 체크
-        boolean coarseLocationGranted = ContextCompat.checkSelfPermission(
-                this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        try {
+            // 일단 먼저 권한이 있는지 체크
+            boolean coarseLocationGranted = ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
 
-        boolean fineLocationGranted = ContextCompat.checkSelfPermission(
-                this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            boolean fineLocationGranted = ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
 
-        if (coarseLocationGranted && fineLocationGranted) {
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
-            return;
-        }
+            if (coarseLocationGranted && fineLocationGranted) {
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
+                return;
+            }
 
-        // 권한이 없는 경우
-        ActivityResultLauncher<String[]> locationPermissionRequest =
-                registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-                            Boolean fineLocationGrantedResult = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
+            // 권한이 없는 경우
+            ActivityResultLauncher<String[]> locationPermissionRequest =
+                    registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
+                                Boolean fineLocationGrantedResult = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
 
-                            if (fineLocationGrantedResult == null || !fineLocationGrantedResult) {
-                                Toast.makeText(this, "permission denied. you can not use gps functions.", Toast.LENGTH_SHORT).show();
-                                return;
+                                if (fineLocationGrantedResult == null || !fineLocationGrantedResult) {
+                                    Toast.makeText(this, "permission denied. you can not use gps functions.", Toast.LENGTH_SHORT).show();
+                                    return;
+                                }
+
+                                try {
+                                    locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
+                                } catch (Exception e) {
+                                    Toast.makeText(this, "permission denied. you can not use gps functions.", Toast.LENGTH_SHORT).show();
+                                }
                             }
+                    );
 
-                            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
-                        }
-                );
-
-        locationPermissionRequest.launch(new String[]{
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-        });
+            locationPermissionRequest.launch(new String[]{
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+            });
+        } catch (Exception e) {
+            Toast.makeText(this, "permission denied. you can not use gps functions.", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
