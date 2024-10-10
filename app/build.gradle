@@ -8,10 +8,10 @@ android {
 
     defaultConfig {
         applicationId "com.github.lancard.nue_fans_launcher"
-        minSdk 34
+        minSdk 33
         targetSdk 34
-        versionCode 55
-        versionName "1.55"
+        versionCode 56
+        versionName "1.56"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
