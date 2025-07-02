@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace 'com.github.lancard.nue_fans_launcher'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.github.lancard.nue_fans_launcher"
         minSdk 33
-        targetSdk 34
-        versionCode 56
-        versionName "1.56"
+        targetSdk 35
+        versionCode 57
+        versionName "1.57"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
